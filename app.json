@@ -20,7 +20,7 @@
     "userInterfaceStyle": "light",
 
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/piw-logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },

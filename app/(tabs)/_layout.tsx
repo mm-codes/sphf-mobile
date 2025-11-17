@@ -15,7 +15,7 @@ export default function TabLayout() {
 
   return (
     <Tabs
-      initialRouteName="foundation"
+      initialRouteName="index"
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: useClientOnlyValue(false, true),
@@ -23,7 +23,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          href: null,
+          title: 'Swahilipot Hb Foundation App',
+          tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
         }}
       />
       <Tabs.Screen

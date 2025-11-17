@@ -1,38 +1,39 @@
 {
   "expo": {
-    "name": "Pwani Innovation Week",
-    "slug": "pwani-innovation-week",
+    "name": "sphf-mobile",
+    "slug": "sphf-mobile",
     "version": "1.0.0",
-
-    "web": {
-      "favicon": "./assets/piw_favicon.png"
-    },
-
-    "experiments": {
-      "tsconfigPaths": true
-    },
-
-    "plugins": [],
-
     "orientation": "portrait",
-    "icon": "./assets/piw_favicon.png",
-
-    "userInterfaceStyle": "light",
-
+    "icon": "./assets/images/icon.png",
+    "scheme": "sphfmobile",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
     "splash": {
-      "image": "./assets/piw-logo.png",
+      "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/piw_favicon.png",
+        "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true
     }
   }
 }

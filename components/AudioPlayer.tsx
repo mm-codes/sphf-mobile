@@ -1,130 +1,170 @@
-import { Audio } from 'expo-av';
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import React, {
+  ReactNode,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import {
+  type AudioStatus,
+  setAudioModeAsync,
+  useAudioPlayer as useExpoAudioPlayer,
+  useAudioPlayerStatus,
+} from 'expo-audio';
+import { Platform } from 'react-native';
 
-type PlayerContextType = {
-  isPlaying: boolean;
-  play: (url?: string, title?: string) => Promise<void>;
-  pause: () => Promise<void>;
-  stop: () => Promise<void>;
-  toggle: (url?: string, title?: string) => Promise<void>;
-  title: string | null;
+type StreamTrack = {
+  id: string;
+  title: string;
+  subtitle?: string;
+  description?: string;
+  url: string;
+  artwork?: string;
 };
 
-const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
+type PlayerContextValue = {
+  currentTrack: StreamTrack | null;
+  status: AudioStatus | null;
+  isLoading: boolean;
+  isPlaying: boolean;
+  play: (track?: StreamTrack) => Promise<void>;
+  pause: () => Promise<void>;
+  stop: () => Promise<void>;
+  togglePlayback: (track?: StreamTrack) => Promise<void>;
+};
 
-const STREAM_URL_DEFAULT = 'https://swahilipotfm.out.airtime.pro/swahilipotfm_a?_ga=2.140975346.1118176404.1720613685-1678527295.1702105127';
+export const FM_STREAM: StreamTrack = {
+  id: 'swahilipot-fm',
+  title: 'Swahilipot FM',
+  subtitle: 'Live coastal stories, music, and culture.',
+  description: '24/7 stream direct from Swahilipot FM studios.',
+  url: 'https://swahilipotfm.out.airtime.pro/swahilipotfm_a?_ga=2.140975346.1118176404.1720613685-1678527295.1702105127',
+};
 
-export function usePlayer() {
-  const ctx = useContext(PlayerContext);
-  if (!ctx) throw new Error('usePlayer must be used within PlayerProvider');
-  return ctx;
-}
+const noop = async () => {};
 
-export function PlayerProvider({ children }: { children: React.ReactNode }) {
-  const soundRef = useRef<Audio.Sound | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [title, setTitle] = useState<string | null>(null);
-  const currentUrlRef = useRef<string | null>(null);
+const defaultPlayerContext: PlayerContextValue = {
+  currentTrack: null,
+  status: null,
+  isLoading: false,
+  isPlaying: false,
+  play: noop,
+  pause: noop,
+  stop: noop,
+  togglePlayback: noop,
+};
 
-  useEffect(() => {
-    Audio.setAudioModeAsync({
-      staysActiveInBackground: true,
-      playsInSilentModeIOS: true,
-      interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
-      shouldDuckAndroid: true,
-      interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
-      playThroughEarpieceAndroid: false,
-    }).catch(() => {});
+const AudioPlayerContext = createContext<PlayerContextValue>(defaultPlayerContext);
 
-    return () => {
-      // cleanup on unmount
-      if (soundRef.current) {
-        soundRef.current.unloadAsync().catch(() => {});
-        soundRef.current = null;
-      }
-    };
+export default function PlayerProvider({ children }: { children: ReactNode }) {
+  const audioConfiguredRef = useRef(false);
+  const [currentTrack, setCurrentTrack] = useState<StreamTrack | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const player = useExpoAudioPlayer(null, { updateInterval: 1000, keepAudioSessionActive: true });
+  const status = useAudioPlayerStatus(player);
+
+  const ensureAudioMode = useCallback(async () => {
+    if (Platform.OS === 'web' || audioConfiguredRef.current) {
+      return;
+    }
+    try {
+      await setAudioModeAsync({
+        playsInSilentMode: true,
+        allowsRecording: false,
+        interruptionMode: 'mixWithOthers',
+        interruptionModeAndroid: 'doNotMix',
+        shouldPlayInBackground: true,
+        shouldRouteThroughEarpiece: false,
+      });
+      audioConfiguredRef.current = true;
+    } catch (error) {
+      console.warn('[AudioPlayer] Unable to configure audio mode', error);
+    }
   }, []);
 
-  async function loadAndPlay(url: string) {
-    try {
-      if (soundRef.current) {
-        await soundRef.current.unloadAsync();
-        soundRef.current = null;
-      }
+  useEffect(() => {
+    void ensureAudioMode();
+  }, [ensureAudioMode]);
 
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: url },
-        { shouldPlay: true, staysActiveInBackground: true },
-      );
-
-      soundRef.current = sound;
-      currentUrlRef.current = url;
-      setIsPlaying(true);
-
-      sound.setOnPlaybackStatusUpdate(status => {
-        if (!status.isLoaded) return;
-        setIsPlaying(status.isPlaying ?? false);
-      });
-    } catch (e) {
-      console.warn('Audio load error', e);
+  useEffect(() => {
+    if (status?.isLoaded) {
+      setIsLoading(false);
     }
-  }
+  }, [status?.isLoaded]);
 
-  async function play(url?: string, titleArg?: string) {
-    const urlToUse = url ?? STREAM_URL_DEFAULT;
-    if (titleArg) setTitle(titleArg);
-
-    // if already playing same URL, do nothing
-    if (isPlaying && currentUrlRef.current === urlToUse) return;
-
-    await loadAndPlay(urlToUse);
-  }
-
-  async function pause() {
-    try {
-      if (soundRef.current) {
-        await soundRef.current.pauseAsync();
+  const play = useCallback(
+    async (track?: StreamTrack) => {
+      const targetTrack = track ?? currentTrack ?? FM_STREAM;
+      setCurrentTrack(targetTrack);
+      setIsLoading(true);
+      try {
+        await ensureAudioMode();
+        const needsSource = currentTrack?.id !== targetTrack.id || !status?.isLoaded;
+        if (needsSource) {
+          player.replace({ uri: targetTrack.url });
+        }
+        if (!status?.playing) {
+          player.play();
+        }
+      } catch (error) {
+        console.warn('Failed to start Swahilipot FM stream', error);
       }
-    } catch (e) {}
-  }
+    },
+    [currentTrack, ensureAudioMode, player, status?.isLoaded, status?.playing],
+  );
 
-  async function stop() {
+  const pause = useCallback(async () => {
+    player.pause();
+  }, [player]);
+
+  const stop = useCallback(async () => {
+    player.pause();
     try {
-      if (soundRef.current) {
-        await soundRef.current.stopAsync();
-        await soundRef.current.unloadAsync();
-        soundRef.current = null;
-        currentUrlRef.current = null;
-        setIsPlaying(false);
-        setTitle(null);
-      }
-    } catch (e) {}
-  }
+      await player.seekTo(0);
+    } catch (error) {
+      console.warn('Unable to reset stream progress', error);
+    }
+    player.replace(null);
+    setCurrentTrack(null);
+    setIsLoading(false);
+  }, [player]);
 
-  async function toggle(url?: string, titleArg?: string) {
-    const urlToUse = url ?? STREAM_URL_DEFAULT;
-    if (!isPlaying) {
-      await play(urlToUse, titleArg);
-    } else {
-      // if playing a different stream, switch
-      if (currentUrlRef.current && currentUrlRef.current !== urlToUse) {
-        await play(urlToUse, titleArg);
-      } else {
+  const togglePlayback = useCallback(
+    async (track?: StreamTrack) => {
+      if (status?.playing) {
         await pause();
+      } else {
+        await play(track);
       }
-    }
-  }
+    },
+    [pause, play, status?.playing],
+  );
 
-  const value: PlayerContextType = {
-    isPlaying,
-    play,
-    pause,
-    stop,
-    toggle,
-    title,
-  };
+  const contextValue = useMemo<PlayerContextValue>(
+    () => ({
+      currentTrack,
+      status,
+      isLoading,
+      isPlaying: !!status?.playing,
+      play,
+      pause,
+      stop,
+      togglePlayback,
+    }),
+    [currentTrack, status, isLoading, play, pause, stop, togglePlayback],
+  );
 
-  return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;
+  return <AudioPlayerContext.Provider value={contextValue}>{children}</AudioPlayerContext.Provider>;
 }
 
-export default PlayerProvider;
+export const useAudioPlayer = () => {
+  const context = useContext(AudioPlayerContext);
+  if (context === defaultPlayerContext) {
+    throw new Error('useAudioPlayer must be used inside PlayerProvider');
+  }
+  return context;
+};
+  

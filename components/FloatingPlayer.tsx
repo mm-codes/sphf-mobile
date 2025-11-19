@@ -1,24 +1,50 @@
-import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { usePlayer } from './AudioPlayer';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
+import React, { useMemo } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useAudioPlayer } from './AudioPlayer';
+
+const TAB_BAR_HEIGHT_FALLBACK = 64;
 
 export default function FloatingPlayer() {
-  const { isPlaying, toggle, stop, title } = usePlayer();
+  const insets = useSafeAreaInsets();
+  const { currentTrack, isPlaying, isLoading, togglePlayback, stop } = useAudioPlayer();
+
+  const bottomOffset = useMemo(() => Math.max(insets.bottom, 12) + TAB_BAR_HEIGHT_FALLBACK, [insets.bottom]);
+
+  if (!currentTrack) {
+    return null;
+  }
 
   return (
-    <View style={styles.container} pointerEvents="box-none">
-      <View style={styles.card}>
-        <View style={styles.info}>
-          <Text style={styles.title} numberOfLines={1}>{title ?? 'Swahilipot FM'}</Text>
+    <View pointerEvents="box-none" style={[styles.wrapper, { paddingBottom: bottomOffset }]}>
+      <View style={styles.container} accessibilityRole="adjustable" accessibilityLabel={`${currentTrack.title} player`}>
+        <View style={styles.meta}>
+          <Text style={styles.title} numberOfLines={1}>
+            {currentTrack.title}
+          </Text>
+          {currentTrack.subtitle ? (
+            <Text style={styles.subtitle} numberOfLines={1}>
+              {currentTrack.subtitle}
+            </Text>
+          ) : null}
         </View>
         <View style={styles.controls}>
-          <TouchableOpacity onPress={() => toggle()} style={styles.button} accessibilityLabel="Play or pause">
-            <Ionicons name={isPlaying ? 'pause' : 'play'} size={20} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => stop()} style={[styles.button, styles.stop]} accessibilityLabel="Stop">
-            <Ionicons name="stop" size={18} color="#fff" />
-          </TouchableOpacity>
+          <Pressable
+            style={styles.controlButton}
+            onPress={() => togglePlayback(currentTrack)}
+            accessibilityRole="button"
+            accessibilityLabel={isPlaying ? 'Pause live stream' : 'Play live stream'}>
+            {isLoading ? (
+              <ActivityIndicator size="small" color="#111827" />
+            ) : (
+              <FontAwesome name={isPlaying ? 'pause' : 'play'} size={16} color="#111827" />
+            )}
+          </Pressable>
+          <Pressable style={styles.controlButton} onPress={stop} accessibilityRole="button" accessibilityLabel="Stop live stream">
+            <FontAwesome name="stop" size={16} color="#111827" />
+          </Pressable>
         </View>
       </View>
     </View>
@@ -26,44 +52,57 @@ export default function FloatingPlayer() {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  wrapper: {
     position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: 24,
-    alignItems: 'center',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+    pointerEvents: 'box-none',
   },
-  card: {
+  container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#111827',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 24,
-    minWidth: 200,
-    maxWidth: 640,
-    opacity: 0.95,
+    justifyContent: 'space-between',
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#d1d5db',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#ffffffee',
+    shadowColor: '#111827',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+    zIndex: 20,
   },
-  info: {
+  meta: {
     flex: 1,
-    marginRight: 8,
+    paddingRight: 12,
   },
   title: {
-    color: '#fff',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
+    color: '#111827',
+  },
+  subtitle: {
+    fontSize: 12,
+    color: '#4b5563',
+    marginTop: 2,
   },
   controls: {
     flexDirection: 'row',
     gap: 8,
   },
-  button: {
-    backgroundColor: '#2563eb',
-    padding: 8,
+  controlButton: {
+    height: 36,
+    width: 36,
     borderRadius: 18,
-    marginLeft: 6,
-  },
-  stop: {
-    backgroundColor: '#ef4444',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#d1d5db',
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
